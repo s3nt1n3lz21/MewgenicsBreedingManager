@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from functools import cmp_to_key
 from typing import Mapping, Sequence
 
-from PySide6.QtCore import QRegularExpression, Signal
+from PySide6.QtCore import QRegularExpression, Qt, Signal
 from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QCheckBox,
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -23,6 +25,55 @@ from PySide6.QtWidgets import (
 from mewgenics.populations import Population, TraitCategory, TraitRef
 from mewgenics.populations.copying import CopyMode, preview_copy_scores
 from mewgenics.utils.abilities import _trait_visible_detail
+
+
+SortColumns = list[tuple[int, Qt.SortOrder]]
+
+
+def updated_sort_columns(
+    current: SortColumns, column: int, additive: bool
+) -> SortColumns:
+    existing = next((order for index, order in current if index == column), None)
+    next_order = (
+        Qt.DescendingOrder if existing == Qt.AscendingOrder else Qt.AscendingOrder
+    )
+    if not additive:
+        return [(column, next_order if existing is not None else Qt.AscendingOrder)]
+    result = [(index, order) for index, order in current if index != column]
+    result.append((column, next_order if existing is not None else Qt.AscendingOrder))
+    return result
+
+
+def sorted_rows(rows, columns: SortColumns, value_for):
+    def compare(left, right):
+        for column, order in columns:
+            left_value = value_for(left, column)
+            right_value = value_for(right, column)
+            left_blank = left_value is None or left_value == ""
+            right_blank = right_value is None or right_value == ""
+            if left_blank != right_blank:
+                return 1 if left_blank else -1
+            if left_blank:
+                continue
+            if isinstance(left_value, str):
+                left_value = left_value.casefold()
+            if isinstance(right_value, str):
+                right_value = right_value.casefold()
+            if left_value == right_value:
+                continue
+            result = -1 if left_value < right_value else 1
+            return result if order == Qt.AscendingOrder else -result
+        return 0
+
+    return sorted(rows, key=cmp_to_key(compare))
+
+
+def sort_summary(table: QTableWidget, columns: SortColumns) -> str:
+    return ", ".join(
+        f"{table.horizontalHeaderItem(column).text()} "
+        f"{'↑' if order == Qt.AscendingOrder else '↓'}"
+        for column, order in columns
+    )
 
 
 class NullableScoreEditor(QWidget):
@@ -64,11 +115,24 @@ class TraitScoreTable(QWidget):
         controls.addWidget(self.search)
         controls.addWidget(self.needs_review)
         layout.addLayout(controls)
+        self.sort_label = QLabel()
+        self.sort_label.setToolTip("Click a header to sort. Shift-click to add a secondary sort.")
+        layout.addWidget(self.sort_label)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Category", "Trait", "Description", "Cats", "Score"])
+        self.table.setSortingEnabled(False)
+        self.table.horizontalHeader().setSortIndicatorShown(True)
+        self.table.horizontalHeader().sectionClicked.connect(self._on_header_clicked)
         layout.addWidget(self.table)
         self._population = None
         self._traits: list[TraitRef] = []
+        self._affected_counts: Mapping[str, int] = {}
+        self._descriptions: Mapping[tuple[TraitCategory, str], str] = {}
+        self._sort_columns: SortColumns = [
+            (0, Qt.AscendingOrder),
+            (1, Qt.AscendingOrder),
+        ]
+        self._update_sort_display()
 
     def set_population(
         self,
@@ -78,18 +142,31 @@ class TraitScoreTable(QWidget):
         descriptions: Mapping[tuple[TraitCategory, str], str] | None = None,
     ) -> None:
         self._population = population
-        self._traits = list(encountered)
+        self._affected_counts = affected_counts
+        self._descriptions = descriptions or {}
+        category_order = {category: index for index, category in enumerate(TraitCategory)}
+        self._traits = sorted_rows(
+            list(encountered),
+            self._sort_columns,
+            lambda trait, column: {
+                0: category_order[trait.category],
+                1: trait.label,
+                2: _trait_visible_detail(self._descriptions.get(trait.identity, "")),
+                3: self._affected_counts.get(trait.key, 0),
+                4: population.scores[trait.category].get(trait.identity[1]),
+            }[column],
+        )
         self.table.setRowCount(len(self._traits))
         for row, trait in enumerate(self._traits):
             self.table.setItem(row, 0, QTableWidgetItem(trait.category.value))
             self.table.setItem(row, 1, QTableWidgetItem(trait.label))
-            full_description = (descriptions or {}).get(trait.identity, "")
+            full_description = self._descriptions.get(trait.identity, "")
             description = QTableWidgetItem(
                 _trait_visible_detail(full_description) or "No description available"
             )
             description.setToolTip(full_description)
             self.table.setItem(row, 2, description)
-            self.table.setItem(row, 3, QTableWidgetItem(str(affected_counts.get(trait.key, 0))))
+            self.table.setItem(row, 3, QTableWidgetItem(str(self._affected_counts.get(trait.key, 0))))
             editor = NullableScoreEditor()
             editor.set_score(population.scores[trait.category].get(trait.identity[1]))
             editor.scoreChanged.connect(
@@ -97,6 +174,29 @@ class TraitScoreTable(QWidget):
             )
             self.table.setCellWidget(row, 4, editor)
         self._apply_filter()
+
+    def set_sort_column(self, column: int, additive: bool = False) -> None:
+        self._sort_columns = updated_sort_columns(self._sort_columns, column, additive)
+        self._update_sort_display()
+        if self._population is not None:
+            self.set_population(
+                self._population, self._traits, self._affected_counts, self._descriptions
+            )
+
+    def sort_summary(self) -> str:
+        return sort_summary(self.table, self._sort_columns)
+
+    def _on_header_clicked(self, column: int) -> None:
+        self.set_sort_column(
+            column, bool(QApplication.keyboardModifiers() & Qt.ShiftModifier)
+        )
+
+    def _update_sort_display(self) -> None:
+        summary = self.sort_summary()
+        self.sort_label.setText(f"Sort: {summary}")
+        if self._sort_columns:
+            column, order = self._sort_columns[0]
+            self.table.horizontalHeader().setSortIndicator(column, order)
 
     def set_needs_review_only(self, enabled: bool) -> None:
         self.needs_review.setChecked(enabled)
