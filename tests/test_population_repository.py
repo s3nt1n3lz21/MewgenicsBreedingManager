@@ -26,7 +26,7 @@ def test_population_configuration_round_trips_all_categories_and_zero(tmp_path):
     loaded = PopulationRepository(str(path)).load()
 
     assert loaded == [population]
-    assert all(list(loaded[0].scores[c].values()) == [0] for c in TraitCategory)
+    assert all(loaded[0].scores[c][c.value.lower()] == 0 for c in TraitCategory)
 
 
 def test_assignment_configuration_round_trips_known_cats(tmp_path):
@@ -93,3 +93,27 @@ def test_failed_atomic_replace_keeps_previous_file(tmp_path, monkeypatch):
         repository.save([Population.create("Changed", "fighter")])
 
     assert path.read_text(encoding="utf-8") == original
+
+
+def test_old_population_file_is_seeded_with_base_stat_defaults(tmp_path):
+    path = tmp_path / "populations.json"
+    path.write_text(json.dumps({
+        "schemaVersion": 1,
+        "populations": [{"id": "fighter", "name": "Fighter", "scores": {}}],
+    }), encoding="utf-8")
+
+    population = PopulationRepository(str(path)).load()[0]
+
+    assert population.scores[TraitCategory.BASE_STAT]["str:7"] == 2
+
+
+def test_explicitly_empty_base_stat_scores_remain_unset_after_round_trip(tmp_path):
+    path = tmp_path / "populations.json"
+    population = Population.create("Fighter", "fighter").with_score(
+        TraitCategory.BASE_STAT, "str:7", None
+    )
+
+    PopulationRepository(str(path)).save([population])
+    loaded = PopulationRepository(str(path)).load()[0]
+
+    assert "str:7" not in loaded.scores[TraitCategory.BASE_STAT]
