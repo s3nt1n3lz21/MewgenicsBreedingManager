@@ -35,8 +35,13 @@ If you'd like to support the project, you can [here](https://ko-fi.com/frankieg3
 Two views for evaluating which cats to keep, breed, or cull:
 
 - **Detailed Scoring** — assigns a breed priority score to every cat based on configurable weights: stat rarity, genetic safety, trait ratings, personality, age, and relationships. Includes heatmap mode, scope filtering by room, complex weight rules, and 5 independent profiles for different strategies.
-- **Simple Scoring** — assign point values to individual stats, mutations, and traits, then sort by total. Great for targeted goals like "high STR melee cats" or "collect all rare mutations."
-- Each view has its own trait-rating profiles (5 slots) stored per save.
+- **Population Scoring** — group cats into editable populations (starting with Fighter and Ranged), then assign separate whole-number values to each population's active abilities, passives, mutations, disorders, and birth defects. Blank means not reviewed; an explicit `0` means reviewed and neutral.
+- Population Scoring marks unassigned cats with `?` and assigned cats that still have unreviewed traits with `!`. Assigning a cat can also fill its unassigned room-mates without changing cats that already belong to a population.
+- Newly born cats inherit a population only when every pre-existing living cat in their room has the same assigned population. New strays and kittens in mixed or partially unassigned rooms remain unassigned.
+- Scores can be copied between populations either into unset values only or by overwriting existing values. Populations can be added, renamed, deleted, and restored with the in-session Undo action.
+- Detailed Scoring retains its own trait-rating profiles stored per save.
+
+Population definitions and scores are reusable across all saves. Cat-to-population assignments are stored in a separate JSON sidecar for each save. The manager never writes population data into the Mewgenics `.sav` file; it only reads that file. These JSON files are also the intended data boundary for a future in-game C++ companion.
 
 ### Breeding & Genetics
 

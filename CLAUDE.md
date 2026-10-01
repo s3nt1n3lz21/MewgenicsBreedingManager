@@ -60,6 +60,13 @@ src/
       breeding_cache.py             # BreedingCache + BreedingCacheWorker
       cat_table_model.py            # CatTableModel, NameTagDelegate, sort helpers
       room_filter_model.py          # RoomFilterModel
+    populations/
+      models.py                     # Population, trait categories, nullable integer scores
+      traits.py                     # Cat trait extraction and stable normalized identities
+      scoring.py                    # Pure population score calculation and unresolved traits
+      repository.py                 # Global score config + per-save assignment JSON
+      assignment.py                 # Room fill and newborn inheritance rules
+      copying.py                    # Fill-unset and overwrite score copying
     workers/
       save_loader.py                # SaveLoadWorker
       room_refresh.py               # QuickRoomRefreshWorker
@@ -73,6 +80,8 @@ src/
       calibration.py                # CalibrationView
       mutation_planner.py           # MutationDisorderPlannerView + planner trait helpers
       furniture.py                  # FurnitureView
+      population_scoring.py         # Population scoring roster and orchestration
+      population_widgets.py         # Population editor, trait table, score-copy dialog
     utils/
       paths.py                      # Bundle dir, save dir, gpak paths, file finders
       config.py                     # App config load/save, UI state, splitter persistence
@@ -149,7 +158,9 @@ All PySide6 code lives here. `mewgenics/__init__.py` runs one-time initializatio
 - `views/calibration.py` — `CalibrationView` (parser field calibration, dev use)
 - `views/mutation_planner.py` — `MutationDisorderPlannerView` (mutation/disorder targeting)
 - `views/furniture.py` — `FurnitureView` (furniture stat viewer per room)
-- `views/manual_scoring.py` — `ManualScoringView` (Simple Scoring — point-value editor)
+- `views/population_scoring.py` — `PopulationScoringView` (population assignment, trait values, totals, and review warnings; exposed to MainWindow as Simple Scoring)
+- `views/population_widgets.py` — nullable score editor, population controls, trait table, and score-copy dialog
+- `views/manual_scoring.py` — legacy `ManualScoringView` retained for compatibility; not used by MainWindow's Simple Scoring navigation
 - `../breed_priority/` — `BreedPriorityView` (Detailed Scoring — weighted breed-priority ranker with profiles, complex weights, filters, heatmap)
 
 **Models & Workers:**
@@ -190,6 +201,7 @@ Cat sprites are composited from DefinedShape PNGs in `src/CatAssets/DefinedShape
 - Windows-targeted: save paths use `%LOCALAPPDATA%`, build produces `.exe`
 - Qt signals/slots for all UI reactivity; `blockSignals(True)` prevents cascading updates during programmatic changes
 - Views persist user choices to a JSON sidecar file alongside the save (load on `__init__`, save on every change)
+- Population definitions and scores use one reusable application-config JSON file. Cat population assignments use a distinct JSON sidecar beside each selected save. Neither repository writes to the game `.sav`; this JSON boundary is safe for a future C++ companion to consume.
 - Utility modules use `_` prefix convention — functions are module-private but importable across the package
 - Mutable module-level state (dicts, lists) must use in-place mutation (`.clear()` + `.update()`, slice assignment) when shared across modules, not rebinding
 
