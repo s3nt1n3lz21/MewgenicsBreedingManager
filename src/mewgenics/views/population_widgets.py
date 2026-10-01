@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from mewgenics.populations import Population, TraitCategory, TraitRef
 from mewgenics.populations.copying import CopyMode, preview_copy_scores
+from mewgenics.utils.abilities import _trait_visible_detail
 
 
 class NullableScoreEditor(QWidget):
@@ -63,8 +64,8 @@ class TraitScoreTable(QWidget):
         controls.addWidget(self.search)
         controls.addWidget(self.needs_review)
         layout.addLayout(controls)
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Category", "Trait", "Cats", "Score"])
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Category", "Trait", "Description", "Cats", "Score"])
         layout.addWidget(self.table)
         self._population = None
         self._traits: list[TraitRef] = []
@@ -74,6 +75,7 @@ class TraitScoreTable(QWidget):
         population: Population,
         encountered: Sequence[TraitRef],
         affected_counts: Mapping[str, int],
+        descriptions: Mapping[tuple[TraitCategory, str], str] | None = None,
     ) -> None:
         self._population = population
         self._traits = list(encountered)
@@ -81,13 +83,19 @@ class TraitScoreTable(QWidget):
         for row, trait in enumerate(self._traits):
             self.table.setItem(row, 0, QTableWidgetItem(trait.category.value))
             self.table.setItem(row, 1, QTableWidgetItem(trait.label))
-            self.table.setItem(row, 2, QTableWidgetItem(str(affected_counts.get(trait.key, 0))))
+            full_description = (descriptions or {}).get(trait.identity, "")
+            description = QTableWidgetItem(
+                _trait_visible_detail(full_description) or "No description available"
+            )
+            description.setToolTip(full_description)
+            self.table.setItem(row, 2, description)
+            self.table.setItem(row, 3, QTableWidgetItem(str(affected_counts.get(trait.key, 0))))
             editor = NullableScoreEditor()
             editor.set_score(population.scores[trait.category].get(trait.identity[1]))
             editor.scoreChanged.connect(
                 lambda value, current=trait: self.scoreChanged.emit(current, value)
             )
-            self.table.setCellWidget(row, 3, editor)
+            self.table.setCellWidget(row, 4, editor)
         self._apply_filter()
 
     def set_needs_review_only(self, enabled: bool) -> None:
