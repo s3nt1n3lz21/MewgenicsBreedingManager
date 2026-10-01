@@ -6,8 +6,11 @@ from types import MappingProxyType
 from typing import Mapping
 from uuid import uuid4
 
+from save_parser import STAT_NAMES
+
 
 class TraitCategory(str, Enum):
+    BASE_STAT = "baseStats"
     ACTIVE_ABILITY = "activeAbilities"
     PASSIVE = "passives"
     MUTATION = "mutations"
@@ -17,6 +20,14 @@ class TraitCategory(str, Enum):
 
 def empty_scores() -> dict[TraitCategory, dict[str, int]]:
     return {category: {} for category in TraitCategory}
+
+
+def default_base_stat_scores() -> dict[str, int]:
+    return {
+        f"{stat.lower()}:{value}": value - 5
+        for stat in STAT_NAMES
+        for value in range(8)
+    }
 
 
 def normalize_trait_key(value: str) -> str:
@@ -59,7 +70,9 @@ class Population:
 
     @classmethod
     def create(cls, name: str, population_id: str | None = None) -> "Population":
-        return cls(population_id or uuid4().hex, name, empty_scores())
+        scores = empty_scores()
+        scores[TraitCategory.BASE_STAT] = default_base_stat_scores()
+        return cls(population_id or uuid4().hex, name, scores)
 
     def with_score(self, category: TraitCategory, key: str, value: int | None) -> "Population":
         copied = {item: dict(values) for item, values in self.scores.items()}
