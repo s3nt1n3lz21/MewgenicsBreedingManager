@@ -93,10 +93,10 @@ def test_copy_dialog_defaults_to_all_categories_and_fill_unset(app):
 
     assert dialog.selected_categories() == set(TraitCategory)
     assert dialog.copy_mode() is CopyMode.FILL_UNSET
-    assert "Preserve: 1" in dialog.preview_label.text()
+    assert "Preserve: 57" in dialog.preview_label.text()
 
     dialog.overwrite.setChecked(True)
-    assert "Overwrite: 1" in dialog.preview_label.text()
+    assert "Overwrite: 57" in dialog.preview_label.text()
 
 
 def _cat(uid, name, room="Attic", **traits):
@@ -203,6 +203,29 @@ def test_roster_defaults_to_room_then_score_descending_and_can_sort_name(app, tm
     assert [view.table.item(row, 0).text() for row in range(3)] == [
         "Bravo", "Alpha Low", "Alpha High"
     ]
+
+
+def test_view_lists_all_base_stat_values_and_allows_population_override(app, tmp_path):
+    view = PopulationScoringView(population_path=str(tmp_path / "populations.json"))
+    cat = _cat("cat", "Cat", base_stats={
+        "STR": 7, "DEX": 6, "CON": 5, "INT": 4, "SPD": 3, "CHA": 2, "LCK": 1,
+    })
+    view.set_cats([cat])
+    view.assign_population("cat", "fighter", include_room_peers=False)
+
+    stat_rows = [
+        view.trait_table.table.item(row, 1).text()
+        for row in range(view.trait_table.table.rowCount())
+        if view.trait_table.table.item(row, 0).text() == TraitCategory.BASE_STAT.value
+    ]
+    assert len(stat_rows) == 56
+    assert "STR = 0" in stat_rows
+    assert "LCK = 7" in stat_rows
+    assert view.score_for("cat").total == -7
+
+    view.set_trait_score("fighter", TraitCategory.BASE_STAT, "str:7", 10)
+
+    assert view.score_for("cat").total == 1
 
 
 def test_roster_shows_unassigned_unresolved_and_complete_states(app, tmp_path):
