@@ -6,7 +6,12 @@ import os
 import tempfile
 from typing import Mapping, Sequence
 
-from .models import Population, TraitCategory, default_populations
+from .models import (
+    Population,
+    TraitCategory,
+    default_base_stat_scores,
+    default_populations,
+)
 
 
 SCHEMA_VERSION = 1
@@ -85,7 +90,10 @@ class PopulationRepository:
             scores = {}
             raw_scores = item.get("scores", {})
             for category in TraitCategory:
-                scores[category] = raw_scores.get(category.value, {})
+                if category is TraitCategory.BASE_STAT and category.value not in raw_scores:
+                    scores[category] = default_base_stat_scores()
+                else:
+                    scores[category] = raw_scores.get(category.value, {})
             result.append(Population(item["id"], item["name"], scores))
         return result or default_populations()
 
