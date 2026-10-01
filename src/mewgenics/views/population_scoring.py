@@ -6,6 +6,7 @@ from typing import Sequence
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QHBoxLayout,
@@ -42,7 +43,14 @@ from mewgenics.utils.paths import population_assignments_path, population_config
 from mewgenics.utils.abilities import _ability_tip
 from mewgenics.populations.copying import CopyMode
 from mewgenics.populations.models import normalize_trait_key
-from mewgenics.views.population_widgets import CopyScoresDialog, PopulationEditor, TraitScoreTable
+from mewgenics.views.population_widgets import (
+    CopyScoresDialog,
+    PopulationEditor,
+    TraitScoreTable,
+    sort_summary,
+    sorted_rows,
+    updated_sort_columns,
+)
 
 
 @dataclass(frozen=True)
@@ -108,10 +116,23 @@ class PopulationScoringView(QWidget):
 
         right = QWidget()
         right_layout = QVBoxLayout(right)
+        self._roster_sort_columns = [
+            (1, Qt.AscendingOrder),
+            (3, Qt.DescendingOrder),
+        ]
+        self.roster_sort_label = QLabel()
+        self.roster_sort_label.setToolTip(
+            "Click a header to sort. Shift-click to add a secondary sort."
+        )
+        right_layout.addWidget(self.roster_sort_label)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Name", "Room", "Population", "Score", "Review"])
+        self.table.setSortingEnabled(False)
+        self.table.horizontalHeader().setSortIndicatorShown(True)
+        self.table.horizontalHeader().sectionClicked.connect(self._on_roster_header_clicked)
         self.table.itemSelectionChanged.connect(self._show_selected_breakdown)
         right_layout.addWidget(self.table)
+        self._update_roster_sort_display()
         self.breakdown_label = QLabel("Select a cat to see its score breakdown.")
         self.breakdown_label.setWordWrap(True)
         right_layout.addWidget(self.breakdown_label)
@@ -308,6 +329,21 @@ class PopulationScoringView(QWidget):
 
     def _populate_roster(self) -> None:
         active = [cat for cat in self._cats if cat.status != "Gone"]
+        populations = {population.id: population.name for population in self._populations}
+        active = sorted_rows(
+            active,
+            self._roster_sort_columns,
+            lambda cat, column: {
+                0: cat.name,
+                1: cat.room or "",
+                2: populations.get(self.assignment_for(cat.unique_id) or ""),
+                3: (
+                    self._scores[cat.unique_id].total
+                    if cat.unique_id in self._scores else None
+                ),
+                4: self.review_state_for(cat.unique_id),
+            }[column],
+        )
         self._suppress_assignment_signals = True
         self.table.setRowCount(len(active))
         for row, cat in enumerate(active):
@@ -330,6 +366,28 @@ class PopulationScoringView(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem("—" if result is None else str(result.total)))
             self.table.setItem(row, 4, QTableWidgetItem(self.review_state_for(cat.unique_id)))
         self._suppress_assignment_signals = False
+
+    def set_roster_sort_column(self, column: int, additive: bool = False) -> None:
+        self._roster_sort_columns = updated_sort_columns(
+            self._roster_sort_columns, column, additive
+        )
+        self._update_roster_sort_display()
+        self._populate_roster()
+
+    def roster_sort_summary(self) -> str:
+        return sort_summary(self.table, self._roster_sort_columns)
+
+    def _on_roster_header_clicked(self, column: int) -> None:
+        self.set_roster_sort_column(
+            column, bool(QApplication.keyboardModifiers() & Qt.ShiftModifier)
+        )
+
+    def _update_roster_sort_display(self) -> None:
+        summary = self.roster_sort_summary()
+        self.roster_sort_label.setText(f"Sort: {summary}")
+        if self._roster_sort_columns:
+            column, order = self._roster_sort_columns[0]
+            self.table.horizontalHeader().setSortIndicator(column, order)
 
     def _assignment_changed(self, cat_id: str, combo: QComboBox) -> None:
         if self._suppress_assignment_signals:
