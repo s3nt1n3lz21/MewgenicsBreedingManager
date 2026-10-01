@@ -50,9 +50,22 @@ def test_trait_table_lists_encountered_traits_and_filters_reviewed_zero(app):
         TraitRef(TraitCategory.MUTATION, "missing", "Missing"),
     ]
     table = TraitScoreTable()
-    table.set_population(population, encountered, {"reviewed": 2, "missing": 1})
+    table.set_population(
+        population,
+        encountered,
+        {"reviewed": 2, "missing": 1},
+        {
+            (TraitCategory.PASSIVE, "reviewed"): "A reviewed passive description.",
+            (TraitCategory.MUTATION, "missing"): "Head Mutation (ID 12)\nMissing\n+2 STR",
+        },
+    )
 
     assert table.visible_trait_keys() == ["reviewed", "missing"]
+    assert table.table.columnCount() == 5
+    assert table.table.horizontalHeaderItem(2).text() == "Description"
+    assert table.table.item(0, 2).text() == "A reviewed passive description."
+    assert table.table.item(1, 2).text() == "+2 STR"
+    assert "Head Mutation" in table.table.item(1, 2).toolTip()
     table.set_needs_review_only(True)
     assert table.visible_trait_keys() == ["missing"]
 
@@ -100,9 +113,38 @@ def _cat(uid, name, room="Attic", **traits):
         "mutations": [],
         "disorders": [],
         "defects": [],
+        "mutation_chip_items": [],
+        "defect_chip_items": [],
     }
     values.update(traits)
     return SimpleNamespace(**values)
+
+
+def test_view_supplies_ability_mutation_and_missing_descriptions(app, tmp_path, monkeypatch):
+    monkeypatch.setitem(
+        __import__("mewgenics.utils.abilities", fromlist=["_ABILITY_DESC"])._ABILITY_DESC,
+        "scratch",
+        "Deal damage to an adjacent enemy.",
+    )
+    view = PopulationScoringView(population_path=str(tmp_path / "populations.json"))
+    cat = _cat(
+        "cat",
+        "Cat",
+        abilities=["scratch"],
+        mutations=["Strong Head"],
+        disorders=["UnknownDisorder"],
+        mutation_chip_items=[("Strong Head", "Head Mutation (ID 12)\nStrong Head\n+2 STR")],
+    )
+
+    view.set_cats([cat])
+
+    descriptions = {
+        view.trait_table.table.item(row, 1).text(): view.trait_table.table.item(row, 2).text()
+        for row in range(view.trait_table.table.rowCount())
+    }
+    assert descriptions["scratch"] == "Deal damage to an adjacent enemy."
+    assert descriptions["Strong Head"] == "+2 STR"
+    assert descriptions["UnknownDisorder"] == "No description available"
 
 
 def test_roster_shows_unassigned_unresolved_and_complete_states(app, tmp_path):
