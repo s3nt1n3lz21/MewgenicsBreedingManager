@@ -13,6 +13,7 @@ from mewgenics.populations import (
     default_populations,
     score_cat,
 )
+from save_parser import STAT_NAMES
 
 
 def _cat(**overrides):
@@ -31,7 +32,47 @@ def test_default_populations_are_fighter_and_ranged_with_empty_scores():
     populations = default_populations()
 
     assert [population.name for population in populations] == ["Fighter", "Ranged"]
-    assert all(not any(population.scores.values()) for population in populations)
+    assert all(
+        not population.scores[category]
+        for population in populations
+        for category in TraitCategory
+        if category is not TraitCategory.BASE_STAT
+    )
+
+
+def test_default_populations_seed_each_base_stat_value_minus_five():
+    population = default_populations()[0]
+
+    assert len(population.scores[TraitCategory.BASE_STAT]) == len(STAT_NAMES) * 8
+    for stat in STAT_NAMES:
+        for value in range(8):
+            assert population.scores[TraitCategory.BASE_STAT][f"{stat.lower()}:{value}"] == value - 5
+
+
+def test_base_stats_contribute_one_configured_score_per_stat():
+    population = Population.create("Fighter", "fighter")
+    cat = _cat(base_stats={stat: 5 for stat in STAT_NAMES})
+    cat.base_stats.update({"STR": 7, "DEX": 3})
+
+    result = score_cat(cat, population)
+
+    assert result.total == 0
+    assert result.is_complete
+    assert len(result.contributions) == len(STAT_NAMES)
+
+
+def test_base_stat_score_can_be_changed_or_explicitly_unset():
+    population = Population.create("Fighter", "fighter")
+    population = population.with_score(TraitCategory.BASE_STAT, "dex:7", 0)
+    population = population.with_score(TraitCategory.BASE_STAT, "str:7", None)
+    cat = _cat(base_stats={stat: 5 for stat in STAT_NAMES})
+    cat.base_stats.update({"STR": 7, "DEX": 7})
+
+    result = score_cat(cat, population)
+
+    assert result.total == 0
+    assert not result.is_complete
+    assert [trait.key for trait in result.unresolved] == ["str:7"]
 
 
 def test_zero_is_configured_while_absent_key_is_unresolved():
