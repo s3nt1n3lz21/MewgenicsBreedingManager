@@ -39,7 +39,9 @@ from mewgenics.populations import (
     unassigned_room_peers,
 )
 from mewgenics.utils.paths import population_assignments_path, population_config_path
+from mewgenics.utils.abilities import _ability_tip
 from mewgenics.populations.copying import CopyMode
+from mewgenics.populations.models import normalize_trait_key
 from mewgenics.views.population_widgets import CopyScoresDialog, PopulationEditor, TraitScoreTable
 
 
@@ -63,6 +65,7 @@ class PopulationScoringView(QWidget):
         self._cats: list[Cat] = []
         self._scores: dict[str, CatScoreResult] = {}
         self._encountered: list[TraitRef] = []
+        self._trait_descriptions: dict[tuple[TraitCategory, str], str] = {}
         self._suppress_assignment_signals = False
         self._deleted_population: DeletedPopulation | None = None
         self._pending_population_save = False
@@ -138,10 +141,15 @@ class PopulationScoringView(QWidget):
         self._assignment_state = apply_newborn_assignments(previous, self._cats, self._assignment_state)
         self._save_assignments()
         encountered = {}
+        descriptions = {}
         for cat in self._cats:
             for trait in traits_for_cat(cat):
                 encountered.setdefault(trait.identity, trait)
+                description = self._description_for_trait(cat, trait)
+                if description:
+                    descriptions.setdefault(trait.identity, description)
         self._encountered = list(encountered.values())
+        self._trait_descriptions = descriptions
         self._recompute()
 
     def assign_population(self, cat_id: str, population_id: str, include_room_peers: bool) -> None:
@@ -369,7 +377,9 @@ class PopulationScoringView(QWidget):
             for cat in self._cats if cat.unique_id in assigned_cat_ids
             for trait in traits_for_cat(cat)
         )
-        self.trait_table.set_population(population, self._encountered, counts)
+        self.trait_table.set_population(
+            population, self._encountered, counts, self._trait_descriptions
+        )
 
     def _show_selected_breakdown(self) -> None:
         row = self.table.currentRow()
@@ -391,6 +401,18 @@ class PopulationScoringView(QWidget):
 
     def _population_by_id(self, population_id: str) -> Population:
         return next(population for population in self._populations if population.id == population_id)
+
+    @staticmethod
+    def _description_for_trait(cat: Cat, trait: TraitRef) -> str:
+        chip_attribute = {
+            TraitCategory.MUTATION: "mutation_chip_items",
+            TraitCategory.BIRTH_DEFECT: "defect_chip_items",
+        }.get(trait.category)
+        if chip_attribute:
+            for label, description in getattr(cat, chip_attribute, None) or []:
+                if normalize_trait_key(label) == trait.identity[1]:
+                    return str(description or "")
+        return _ability_tip(trait.label)
 
     def _refresh_population_editor(self, selected_id: str = "") -> None:
         self.population_editor.set_populations(self._populations, selected_id)
