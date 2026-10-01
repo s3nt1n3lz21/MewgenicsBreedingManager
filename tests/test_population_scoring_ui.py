@@ -147,6 +147,64 @@ def test_view_supplies_ability_mutation_and_missing_descriptions(app, tmp_path, 
     assert descriptions["UnknownDisorder"] == "No description available"
 
 
+def test_trait_table_supports_numeric_and_additive_column_sorting(app):
+    population = (
+        Population.create("Fighter", "fighter")
+        .with_score(TraitCategory.PASSIVE, "alpha", 10)
+        .with_score(TraitCategory.PASSIVE, "beta", 2)
+    )
+    traits = [
+        TraitRef(TraitCategory.PASSIVE, "alpha", "Alpha"),
+        TraitRef(TraitCategory.PASSIVE, "beta", "Beta"),
+        TraitRef(TraitCategory.MUTATION, "gamma", "Gamma"),
+    ]
+    table = TraitScoreTable()
+    table.set_population(population, traits, {"alpha": 2, "beta": 10, "gamma": 1})
+
+    assert table.sort_summary() == "Category ↑, Trait ↑"
+    table.set_sort_column(3, additive=False)
+    table.set_sort_column(3, additive=False)
+    assert table.visible_trait_keys() == ["beta", "alpha", "gamma"]
+    assert table.sort_summary() == "Cats ↓"
+
+    table.set_sort_column(4, additive=False)
+    table.set_sort_column(4, additive=False)
+    assert table.visible_trait_keys() == ["alpha", "beta", "gamma"]
+    assert table.sort_summary() == "Score ↓"
+
+    table.set_sort_column(0, additive=False)
+    table.set_sort_column(1, additive=True)
+    assert table.sort_summary() == "Category ↑, Trait ↑"
+
+
+def test_roster_defaults_to_room_then_score_descending_and_can_sort_name(app, tmp_path):
+    view = PopulationScoringView(population_path=str(tmp_path / "populations.json"))
+    cats = [
+        _cat("b", "Bravo", room="B", abilities=["high"]),
+        _cat("a-low", "Alpha Low", room="A", abilities=["low"]),
+        _cat("a-high", "Alpha High", room="A", abilities=["high"]),
+    ]
+    view.set_cats(cats)
+    for cat in cats:
+        view.assign_population(cat.unique_id, "fighter", include_room_peers=False)
+    view.set_trait_score("fighter", TraitCategory.ACTIVE_ABILITY, "high", 5)
+    view.set_trait_score("fighter", TraitCategory.ACTIVE_ABILITY, "low", 1)
+
+    assert [view.table.item(row, 0).text() for row in range(3)] == [
+        "Alpha High", "Alpha Low", "Bravo"
+    ]
+    assert view.roster_sort_summary() == "Room ↑, Score ↓"
+
+    view.set_roster_sort_column(0, additive=False)
+    assert [view.table.item(row, 0).text() for row in range(3)] == [
+        "Alpha High", "Alpha Low", "Bravo"
+    ]
+    view.set_roster_sort_column(0, additive=False)
+    assert [view.table.item(row, 0).text() for row in range(3)] == [
+        "Bravo", "Alpha Low", "Alpha High"
+    ]
+
+
 def test_roster_shows_unassigned_unresolved_and_complete_states(app, tmp_path):
     view = PopulationScoringView(population_path=str(tmp_path / "populations.json"))
     view.set_save_path(str(tmp_path / "campaign.sav"))
