@@ -33,6 +33,7 @@ from mewgenics.populations import (
     TraitRef,
     apply_newborn_assignments,
     assign_cat_and_peers,
+    base_stat_catalog,
     copy_scores,
     preview_copy_scores,
     score_cat,
@@ -161,8 +162,12 @@ class PopulationScoringView(QWidget):
         self._cats = list(cats or [])
         self._assignment_state = apply_newborn_assignments(previous, self._cats, self._assignment_state)
         self._save_assignments()
-        encountered = {}
-        descriptions = {}
+        catalog = base_stat_catalog()
+        encountered = {trait.identity: trait for trait in catalog}
+        descriptions = {
+            trait.identity: f"Genetic base {trait.label.replace(' =', ' value')} (before other modifiers)."
+            for trait in catalog
+        }
         for cat in self._cats:
             for trait in traits_for_cat(cat):
                 encountered.setdefault(trait.identity, trait)
@@ -462,6 +467,8 @@ class PopulationScoringView(QWidget):
 
     @staticmethod
     def _description_for_trait(cat: Cat, trait: TraitRef) -> str:
+        if trait.category is TraitCategory.BASE_STAT:
+            return f"Genetic base {trait.label.replace(' =', ' value')} (before other modifiers)."
         chip_attribute = {
             TraitCategory.MUTATION: "mutation_chip_items",
             TraitCategory.BIRTH_DEFECT: "defect_chip_items",
