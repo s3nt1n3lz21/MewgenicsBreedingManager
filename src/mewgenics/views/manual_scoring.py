@@ -27,8 +27,6 @@ from mewgenics.utils.trait_ratings import TraitRatings
 
 _DEFAULT_CONFIG = {
     "stat_weight": 1,
-    "constitution_threshold": 10,
-    "constitution_penalty_per_point": 0,
     "desired_mutations": [],
     "desired_mutation_weights": {},   # mutation_name -> int  (per-mutation override)
     "desired_use_individual": False,
@@ -63,13 +61,6 @@ def compute_cat_score(cat, config: dict) -> tuple[int, dict[str, int]]:
 
     # Stats
     breakdown["stats"] = config.get("stat_weight", 1) * _cat_base_sum(cat)
-    constitution = (getattr(cat, "total_stats", None) or cat.base_stats or {}).get("CON")
-    threshold = config.get("constitution_threshold", 10)
-    penalty_per_point = config.get("constitution_penalty_per_point", 0)
-    breakdown["constitution"] = (
-        -max(0, threshold - constitution) * penalty_per_point
-        if constitution is not None else 0
-    )
 
     # Desired mutations
     desired = set(config.get("desired_mutations", []))
@@ -152,8 +143,8 @@ def compute_cat_score(cat, config: dict) -> tuple[int, dict[str, int]]:
 # View
 # ---------------------------------------------------------------------------
 
-_BREAKDOWN_KEYS = ["stats", "constitution", "desired", "undesired", "desired_dis", "undesired_dis", "inbredness", "libido", "aggression", "passives", "spells", "sexuality"]
-_BREAKDOWN_LABELS = ["Stats", "CON", "Desired", "Undes.", "+Dis.", "-Dis.", "Inbred", "Libido", "Aggr", "Passives", "Spells", "Sexuality"]
+_BREAKDOWN_KEYS = ["stats", "desired", "undesired", "desired_dis", "undesired_dis", "inbredness", "libido", "aggression", "passives", "spells", "sexuality"]
+_BREAKDOWN_LABELS = ["Stats", "Desired", "Undes.", "+Dis.", "-Dis.", "Inbred", "Libido", "Aggr", "Passives", "Spells", "Sexuality"]
 
 _COL_NAME = 0
 _COL_ROOM = 1
@@ -619,10 +610,6 @@ class ManualScoringView(QWidget):
         vb.addWidget(self._section_label("Stats"))
         row, self._spin_stat = self._weight_row("Per stat point", 1)
         vb.addLayout(row)
-        row, self._spin_constitution_penalty = self._weight_row("Penalty per CON below 10", 0)
-        self._spin_constitution_penalty.setToolTip("Applied to every cat: lose this many points for each overall Constitution point below 10. Set to 0 to leave scores unchanged.")
-        vb.addLayout(row)
-
         # --- Desired mutations ---
         vb.addWidget(self._section_label("Mutations"))
         self._desired_selector = _MutationSelector("Desired Mutations", 1, self)
@@ -828,8 +815,6 @@ class ManualScoringView(QWidget):
         """Read all widget values into a config dict."""
         return {
             "stat_weight": self._spin_stat.value(),
-            "constitution_threshold": 10,
-            "constitution_penalty_per_point": self._spin_constitution_penalty.value(),
             "desired_mutations": self._desired_selector.get_checked(),
             "desired_mutation_weights": self._desired_selector.get_per_weights(),
             "desired_use_individual": self._desired_selector.use_individual(),
@@ -989,7 +974,6 @@ class ManualScoringView(QWidget):
     def _reset_defaults(self):
         self._suppress_recompute = True
         self._spin_stat.setValue(_DEFAULT_CONFIG["stat_weight"])
-        self._spin_constitution_penalty.setValue(_DEFAULT_CONFIG["constitution_penalty_per_point"])
         self._desired_selector.reset()
         self._undesired_selector.reset()
         self._desired_disorder_selector.reset()
@@ -1045,7 +1029,6 @@ class ManualScoringView(QWidget):
         """Restore widget state from a manual_weights dict."""
         self._suppress_recompute = True
         self._spin_stat.setValue(s.get("stat_weight", _DEFAULT_CONFIG["stat_weight"]))
-        self._spin_constitution_penalty.setValue(s.get("constitution_penalty_per_point", 0))
         self._desired_selector.set_state(
             use_individual=s.get("desired_use_individual", False),
             default_weight=s.get("desired_default_weight", 1),
