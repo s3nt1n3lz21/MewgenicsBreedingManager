@@ -63,7 +63,7 @@ def compute_cat_score(cat, config: dict) -> tuple[int, dict[str, int]]:
 
     # Stats
     breakdown["stats"] = config.get("stat_weight", 1) * _cat_base_sum(cat)
-    constitution = (cat.base_stats or {}).get("CON")
+    constitution = (getattr(cat, "total_stats", None) or cat.base_stats or {}).get("CON")
     threshold = config.get("constitution_threshold", 10)
     penalty_per_point = config.get("constitution_penalty_per_point", 0)
     breakdown["constitution"] = (
@@ -620,7 +620,7 @@ class ManualScoringView(QWidget):
         row, self._spin_stat = self._weight_row("Per stat point", 1)
         vb.addLayout(row)
         row, self._spin_constitution_penalty = self._weight_row("Penalty per CON below 10", 0)
-        self._spin_constitution_penalty.setToolTip("Applied to every cat: lose this many points for each base Constitution point below 10. Set to 0 to leave scores unchanged.")
+        self._spin_constitution_penalty.setToolTip("Applied to every cat: lose this many points for each overall Constitution point below 10. Set to 0 to leave scores unchanged.")
         vb.addLayout(row)
 
         # --- Desired mutations ---
