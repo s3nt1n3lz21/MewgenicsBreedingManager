@@ -80,11 +80,19 @@ def _load_document(path: str) -> dict | None:
 class PopulationRepository:
     def __init__(self, path: str):
         self.path = path
+        self.constitution_penalty_per_point = 0
 
     def load(self) -> list[Population]:
         document = _load_document(self.path)
         if document is None:
+            self.constitution_penalty_per_point = 0
             return default_populations()
+        try:
+            self.constitution_penalty_per_point = max(
+                0, min(99, int(document.get("constitutionPenaltyPerPoint", 0)))
+            )
+        except (TypeError, ValueError):
+            self.constitution_penalty_per_point = 0
         result = []
         for item in document.get("populations", []):
             scores = {}
@@ -100,6 +108,7 @@ class PopulationRepository:
     def save(self, populations: Sequence[Population]) -> None:
         atomic_write_json(self.path, {
             "schemaVersion": SCHEMA_VERSION,
+            "constitutionPenaltyPerPoint": max(0, min(99, int(self.constitution_penalty_per_point))),
             "populations": [
                 {
                     "id": population.id,
