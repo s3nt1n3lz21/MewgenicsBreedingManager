@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from save_parser import Cat
 
-from .models import CatScoreResult, Population, ScoreContribution, TraitRef
+from .models import CatScoreResult, Population, ScoreContribution, TraitCategory, TraitRef
 from .traits import traits_for_cat
 
 
