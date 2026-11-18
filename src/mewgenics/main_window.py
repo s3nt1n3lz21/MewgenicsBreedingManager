@@ -130,7 +130,7 @@ from mewgenics.views.perfect_planner import PerfectCatPlannerView
 from mewgenics.views.calibration import CalibrationView
 from mewgenics.views.mutation_planner import MutationDisorderPlannerView
 from mewgenics.views.furniture import FurnitureView
-from mewgenics.views.manual_scoring import ManualScoringView
+from mewgenics.views.population_scoring import PopulationScoringView as ManualScoringView
 from mewgenics.utils.trait_ratings import TraitRatings
 
 from breed_priority import BreedPriorityView
@@ -2228,6 +2228,8 @@ class MainWindow(QMainWindow):
         if self._manual_scoring_view is not None:
             return
         self._manual_scoring_view = ManualScoringView(self)
+        if self._current_save:
+            self._manual_scoring_view.set_save_path(self._current_save)
         self._manual_scoring_view.hide()
         self._content_vb.addWidget(self._manual_scoring_view, 1)
         self._manual_scoring_view._auto_calc_chk.toggled.connect(self._sync_manual_scoring_auto_calc_action)
@@ -3835,6 +3837,7 @@ class MainWindow(QMainWindow):
                 scoring_path = _scoring_path(self._current_save)
                 self._trait_ratings = TraitRatings(scoring_path)
                 if self._manual_scoring_view is not None:
+                    self._manual_scoring_view.set_save_path(self._current_save)
                     self._manual_scoring_view.set_trait_ratings(self._trait_ratings)
 
             if self._calibration_view is not None:

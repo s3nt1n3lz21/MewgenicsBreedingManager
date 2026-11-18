@@ -59,6 +59,7 @@ else:
     )
 os.makedirs(APPDATA_CONFIG_DIR, exist_ok=True)
 APP_CONFIG_PATH = os.path.join(APPDATA_CONFIG_DIR, "settings.json")
+POPULATION_CONFIG_PATH = os.path.join(APPDATA_CONFIG_DIR, "populations.json")
 LOCALES_DIR = os.path.join(_bundle_dir(), "locales")
 APP_VERSION = _read_app_version()
 
@@ -149,3 +150,13 @@ def _not_adventured_path(save_path: str) -> str:
 
 def _breeding_cache_path(save_path: str) -> str:
     return save_path + ".breeding_cache.json"
+
+
+def population_config_path() -> str:
+    """Return the reusable population-scoring configuration path."""
+    return POPULATION_CONFIG_PATH
+
+
+def population_assignments_path(save_path: str) -> str:
+    """Return the population assignment sidecar for one game save."""
+    return save_path + ".populations.json"
