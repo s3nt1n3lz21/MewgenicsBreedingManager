@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -68,6 +69,7 @@ class PopulationScoringView(QWidget):
         super().__init__(parent)
         self._population_repository = PopulationRepository(population_path or population_config_path())
         self._populations = self._population_repository.load()
+        self._constitution_penalty_per_point = self._population_repository.constitution_penalty_per_point
         self._assignment_repository: AssignmentRepository | None = None
         self._assignment_state = AssignmentState()
         self._unknown_assignments: dict[str, str] = {}
@@ -97,6 +99,19 @@ class PopulationScoringView(QWidget):
         self.population_editor.deleteRequested.connect(self._confirm_delete_population)
         self.population_editor.copyRequested.connect(self._prompt_copy_scores)
         layout.addWidget(self.population_editor)
+        constitution_rule_row = QHBoxLayout()
+        constitution_rule_row.addWidget(QLabel("Penalty per overall CON below 10:"))
+        self.constitution_penalty_spin = QSpinBox()
+        self.constitution_penalty_spin.setRange(0, 99)
+        self.constitution_penalty_spin.setValue(self._constitution_penalty_per_point)
+        self.constitution_penalty_spin.setToolTip(
+            "Applied to every population: subtract this many points for each point of overall "
+            "Constitution below 10, including modifiers and mutation effects. Set to 0 to disable."
+        )
+        self.constitution_penalty_spin.valueChanged.connect(self._on_constitution_penalty_changed)
+        constitution_rule_row.addWidget(self.constitution_penalty_spin)
+        constitution_rule_row.addStretch()
+        layout.addLayout(constitution_rule_row)
         self.undo_delete_button = QPushButton("Undo population deletion")
         self.undo_delete_button.setEnabled(False)
         self.undo_delete_button.clicked.connect(lambda: self.undo_delete())
@@ -328,7 +343,9 @@ class PopulationScoringView(QWidget):
         for cat in self._cats:
             population = populations.get(self._assignment_state.assignments.get(cat.unique_id, ""))
             if population is not None:
-                self._scores[cat.unique_id] = score_cat(cat, population)
+                self._scores[cat.unique_id] = score_cat(
+                    cat, population, self._constitution_penalty_per_point
+                )
         self._populate_roster()
         self._refresh_trait_table()
 
@@ -482,8 +499,14 @@ class PopulationScoringView(QWidget):
     def _refresh_population_editor(self, selected_id: str = "") -> None:
         self.population_editor.set_populations(self._populations, selected_id)
 
+    def _on_constitution_penalty_changed(self, value: int) -> None:
+        self._constitution_penalty_per_point = int(value)
+        self._save_populations()
+        self._recompute()
+
     def _save_populations(self) -> None:
         try:
+            self._population_repository.constitution_penalty_per_point = self._constitution_penalty_per_point
             self._population_repository.save(self._populations)
         except Exception as error:
             self._pending_population_save = True
